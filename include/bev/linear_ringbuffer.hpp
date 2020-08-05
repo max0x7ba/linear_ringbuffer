@@ -284,9 +284,9 @@ template<typename SizeT>
 auto linear_ringbuffer_<SizeT>::cend() const noexcept -> const_iterator
 {
 	auto h = head_ % capacity_;
-        auto t = tail_ % capacity_;
-        bool const wraps = t < h;
-        return buffer_ + t + (wraps ? capacity_ : 0);
+	auto t = tail_ % capacity_;
+	bool const wraps = t < h;
+	return buffer_ + t + (wraps ? capacity_ : 0);
 }
 
 
@@ -365,7 +365,7 @@ int linear_ringbuffer_<SizeT>::initialize(SizeT minsize) noexcept
 
 	// Round up to nearest multiple of page size.
 	size_t const bytes = (minsize + (PAGE_SIZE-1)) & ~(PAGE_SIZE-1);
-        assert(static_cast<SizeT>(bytes) == bytes); // Check that SizeT is large enough to store the size.
+	assert(static_cast<SizeT>(bytes) == bytes); // Check that SizeT is large enough to store the size.
 
 	// Check for overflow.
 	if (bytes*2 < bytes) {
