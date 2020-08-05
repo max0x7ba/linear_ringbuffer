@@ -152,6 +152,7 @@ namespace bev {
 template<typename SizeT = size_t>
 class linear_ringbuffer_ {
 public:
+	static_assert(SizeT(-1) > 0, "SizeT must be an unsigned type.");
 	typedef unsigned char value_type;
 	typedef value_type& reference;
 	typedef const value_type& const_reference;
