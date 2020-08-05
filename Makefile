@@ -1,4 +1,5 @@
-BENCHMARK_LIBS = -pthread
+pagesize := $(or $(shell getconf PAGESIZE),4096)
+cppflags := -Iinclude -pthread -DPAGESIZE=${pagesize} $(CPPFLAGS)
 
 HEADERS = \
   include/bev/linear_ringbuffer.hpp \
@@ -6,11 +7,11 @@ HEADERS = \
 
 all: benchmark tests
 
-benchmark: benchmark.cpp $(HEADERS)
-	g++ $< -O2 -g3 -I./include -o $@ $(CFLAGS) $(CXXFLAGS) $(BENCHMARK_LIBS)
+benchmark: benchmark.cpp $(HEADERS) Makefile
+	g++ $< -O2 -g3 -o $@ $(cppflags) $(CFLAGS) $(CXXFLAGS)
 
-tests: tests.cpp $(HEADERS)
-	g++ $< -g3 -I./include -o $@ $(CFLAGS) $(CXXFLAGS)
+tests: tests.cpp $(HEADERS) Makefile
+	g++ $< -g3 -o $@ $(cppflags) $(CFLAGS) $(CXXFLAGS)
 
 
 PREFIX ?= /usr/local
