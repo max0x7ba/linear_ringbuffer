@@ -153,7 +153,7 @@ namespace bev {
 // make it work atomically but came up empty. If there is one, please tell me.
 //
 
-template<typename Size>
+template<typename SizeT = size_t>
 class linear_ringbuffer_ {
 public:
 	typedef unsigned char value_type;
@@ -168,23 +168,23 @@ public:
 
 	// "640KiB should be enough for everyone."
 	//   - Not Bill Gates.
-	linear_ringbuffer_(size_t minsize = 640*1024);
+	linear_ringbuffer_(SizeT minsize = 640*1024);
 	~linear_ringbuffer_() noexcept;
 
 	// Noexcept initialization interface, see description above.
 	linear_ringbuffer_(const delayed_init) noexcept;
-	int initialize(size_t minsize) noexcept;
+	int initialize(SizeT minsize) noexcept;
 
-	void commit(size_t n) noexcept;
-	void consume(size_t n) noexcept;
+	void commit(SizeT n) noexcept;
+	void consume(SizeT n) noexcept;
 	iterator read_head() noexcept;
 	iterator write_head() noexcept;
 	void clear() noexcept;
 
 	bool empty() const noexcept;
-	size_t size() const noexcept;
-	size_t capacity() const noexcept;
-	size_t free_size() const noexcept;
+	SizeT size() const noexcept;
+	SizeT capacity() const noexcept;
+	SizeT free_size() const noexcept;
 	const_iterator begin() const noexcept;
 	const_iterator cbegin() const noexcept;
 	const_iterator end() const noexcept;
@@ -201,16 +201,16 @@ public:
 
 private:
 	unsigned char* buffer_;
-	size_t capacity_;
-	size_t head_;
-	size_t tail_;
+	SizeT capacity_;
+	SizeT head_;
+	SizeT tail_;
 };
 
 
-template<typename Count>
+template<typename SizeT>
 void swap(
-	linear_ringbuffer_<Count>& lhs,
-	linear_ringbuffer_<Count>& rhs) noexcept;
+	linear_ringbuffer_<SizeT>& lhs,
+	linear_ringbuffer_<SizeT>& rhs) noexcept;
 
 
 struct initialization_error : public std::runtime_error
@@ -220,80 +220,78 @@ struct initialization_error : public std::runtime_error
 };
 
 
-using linear_ringbuffer_st = linear_ringbuffer_<int64_t>;
-using linear_ringbuffer_mt = linear_ringbuffer_<std::atomic<int64_t>>;
-using linear_ringbuffer = linear_ringbuffer_mt;
+using linear_ringbuffer = linear_ringbuffer_<size_t>;
 
 
 // Implementation.
 
-template<typename T>
-void linear_ringbuffer_<T>::commit(size_t n) noexcept {
+template<typename SizeT>
+void linear_ringbuffer_<SizeT>::commit(SizeT n) noexcept {
 	assert(n <= free_size());
 	tail_ += n;
 }
 
 
-template<typename T>
-void linear_ringbuffer_<T>::consume(size_t n) noexcept {
+template<typename SizeT>
+void linear_ringbuffer_<SizeT>::consume(SizeT n) noexcept {
 	assert(n <= size());
 	head_ += n;
 }
 
 
-template<typename T>
-void linear_ringbuffer_<T>::clear() noexcept {
+template<typename SizeT>
+void linear_ringbuffer_<SizeT>::clear() noexcept {
 	tail_ = head_ = 0;
 }
 
 
-template<typename T>
-size_t linear_ringbuffer_<T>::size() const noexcept {
+template<typename SizeT>
+SizeT linear_ringbuffer_<SizeT>::size() const noexcept {
 	return tail_ - head_;
 }
 
 
-template<typename T>
-bool linear_ringbuffer_<T>::empty() const noexcept {
+template<typename SizeT>
+bool linear_ringbuffer_<SizeT>::empty() const noexcept {
 	return head_ == tail_;
 }
 
 
-template<typename T>
-size_t linear_ringbuffer_<T>::capacity() const noexcept {
+template<typename SizeT>
+SizeT linear_ringbuffer_<SizeT>::capacity() const noexcept {
 	return capacity_;
 }
 
 
-template<typename T>
-size_t linear_ringbuffer_<T>::free_size() const noexcept {
+template<typename SizeT>
+SizeT linear_ringbuffer_<SizeT>::free_size() const noexcept {
 	return capacity_ - size();
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::cbegin() const noexcept -> const_iterator
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::cbegin() const noexcept -> const_iterator
 {
 	return buffer_ + head_ % capacity_;
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::begin() const noexcept -> const_iterator
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::begin() const noexcept -> const_iterator
 {
 	return cbegin();
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::read_head() noexcept -> iterator
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::read_head() noexcept -> iterator
 {
 	return buffer_ + head_ % capacity_;
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::cend() const noexcept -> const_iterator
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::cend() const noexcept -> const_iterator
 {
 	auto h = head_ % capacity_;
         auto t = tail_ % capacity_;
@@ -302,22 +300,22 @@ auto linear_ringbuffer_<T>::cend() const noexcept -> const_iterator
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::end() const noexcept -> const_iterator
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::end() const noexcept -> const_iterator
 {
 	return cend();
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::write_head() noexcept -> iterator
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::write_head() noexcept -> iterator
 {
 	return buffer_ + tail_ % capacity_;
 }
 
 
-template<typename T>
-linear_ringbuffer_<T>::linear_ringbuffer_(const delayed_init) noexcept
+template<typename SizeT>
+linear_ringbuffer_<SizeT>::linear_ringbuffer_(const delayed_init) noexcept
   : buffer_(nullptr)
   , capacity_(0)
   , head_(0)
@@ -325,8 +323,8 @@ linear_ringbuffer_<T>::linear_ringbuffer_(const delayed_init) noexcept
 {}
 
 
-template<typename T>
-linear_ringbuffer_<T>::linear_ringbuffer_(size_t minsize)
+template<typename SizeT>
+linear_ringbuffer_<SizeT>::linear_ringbuffer_(SizeT minsize)
   : buffer_(nullptr)
   , capacity_(0)
   , head_(0)
@@ -339,35 +337,31 @@ linear_ringbuffer_<T>::linear_ringbuffer_(size_t minsize)
 }
 
 
-template<typename T>
-linear_ringbuffer_<T>::linear_ringbuffer_(linear_ringbuffer_&& other) noexcept
+template<typename SizeT>
+linear_ringbuffer_<SizeT>::linear_ringbuffer_(linear_ringbuffer_&& other) noexcept
+	: linear_ringbuffer_(delayed_init {})
 {
-	linear_ringbuffer_ tmp(delayed_init {});
-	tmp.swap(other);
-	this->swap(tmp);
+	other.swap(this);
 }
 
 
-template<typename T>
-auto linear_ringbuffer_<T>::operator=(linear_ringbuffer_&& other) noexcept
+template<typename SizeT>
+auto linear_ringbuffer_<SizeT>::operator=(linear_ringbuffer_&& other) noexcept
 	-> linear_ringbuffer_&
 {
-	linear_ringbuffer_ tmp(delayed_init {});
-	tmp.swap(other);
-	this->swap(tmp);
+	other.swap(*this);
 	return *this;
 }
 
 
-template<typename T>
-int linear_ringbuffer_<T>::initialize(size_t minsize) noexcept
+template<typename SizeT>
+int linear_ringbuffer_<SizeT>::initialize(SizeT minsize) noexcept
 {
 #ifdef PAGESIZE
-	static constexpr size_t PAGE_SIZE = PAGESIZE;
+	constexpr size_t PAGE_SIZE = PAGESIZE;
 #else
 	static const size_t PAGE_SIZE = ::sysconf(_SC_PAGESIZE);
 #endif
-        printf("page_size: %zu\n", PAGE_SIZE);
 	// Use `char*` instead of `void*` because we need to do arithmetic on them.
 	unsigned char* addr =nullptr;
 	unsigned char* addr2=nullptr;
@@ -381,6 +375,7 @@ int linear_ringbuffer_<T>::initialize(size_t minsize) noexcept
 
 	// Round up to nearest multiple of page size.
 	size_t const bytes = (minsize + (PAGE_SIZE-1)) & ~(PAGE_SIZE-1);
+        assert(static_cast<SizeT>(bytes) == bytes); // Check that SizeT is large enough to store the size.
 
 	// Check for overflow.
 	if (bytes*2 < bytes) {
@@ -440,8 +435,8 @@ errout:
 }
 
 
-template<typename T>
-linear_ringbuffer_<T>::~linear_ringbuffer_() noexcept
+template<typename SizeT>
+linear_ringbuffer_<SizeT>::~linear_ringbuffer_() noexcept
 {
 	// Either `buffer_` and `capacity_` are both initialized properly,
 	// or both are zero.
@@ -449,8 +444,8 @@ linear_ringbuffer_<T>::~linear_ringbuffer_() noexcept
 }
 
 
-template<typename T>
-void linear_ringbuffer_<T>::swap(linear_ringbuffer_<T>& other) noexcept
+template<typename SizeT>
+void linear_ringbuffer_<SizeT>::swap(linear_ringbuffer_& other) noexcept
 {
 	using std::swap;
 	swap(buffer_, other.buffer_);
@@ -460,10 +455,10 @@ void linear_ringbuffer_<T>::swap(linear_ringbuffer_<T>& other) noexcept
 }
 
 
-template<typename Count>
+template<typename SizeT>
 void swap(
-	linear_ringbuffer_<Count>& lhs,
-	linear_ringbuffer_<Count>& rhs) noexcept
+	linear_ringbuffer_<SizeT>& lhs,
+	linear_ringbuffer_<SizeT>& rhs) noexcept
 {
 	lhs.swap(rhs);
 }
