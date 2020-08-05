@@ -1,12 +1,9 @@
 #pragma once
 
-#include <atomic>
-#include <assert.h>
+#include <cassert>
 #include <cerrno>
-#include <climits>
 #include <cstdint>
-#include <cstring>
-#include <stdexcept>
+#include <system_error>
 
 #include <unistd.h>
 
@@ -102,9 +99,8 @@ namespace bev {
 //
 // If exceptions are preferred, the `linear_ringbuffer(int minsize)`
 // constructor will attempt to initialize the internal buffers immediately and
-// throw a `bev::initialization_error` on failure, which is an exception class
-// derived from `std::runtime_error`. The error code as described above is
-// stored in the `errno_` member of the exception.
+// throw a `std::system_error` on failure. The error code as described above
+// can be read as `ex.code().value()` member of the exception.
 //
 //
 // # Concurrency
@@ -211,13 +207,6 @@ template<typename SizeT>
 void swap(
 	linear_ringbuffer_<SizeT>& lhs,
 	linear_ringbuffer_<SizeT>& rhs) noexcept;
-
-
-struct initialization_error : public std::runtime_error
-{
-	initialization_error(int error);
-	int error;
-};
 
 
 using linear_ringbuffer = linear_ringbuffer_<size_t>;
@@ -332,7 +321,7 @@ linear_ringbuffer_<SizeT>::linear_ringbuffer_(SizeT minsize)
 {
 	int res = this->initialize(minsize);
 	if (res == -1) {
-		throw initialization_error {errno};
+		throw std::system_error {errno, std::system_category(), __PRETTY_FUNCTION__};
 	}
 }
 
@@ -462,11 +451,5 @@ void swap(
 {
 	lhs.swap(rhs);
 }
-
-
-inline initialization_error::initialization_error(int errno_)
-  : std::runtime_error(::strerror(errno_))
-  , error(errno_)
-{}
 
 } // namespace bev

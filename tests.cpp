@@ -70,10 +70,10 @@ void test_linear_ringbuffer() {
 	std::cout << "success\n";
 
 	// Test 3: Check that for-loop iteration works
-	const char* test3 = "Test 3...success\n";
+	const char test3[] = "Test 3...success\n";
 	rb.clear();
-	::strcpy(reinterpret_cast<char*>(rb.write_head()), test3);
-	rb.commit(strlen(test3));
+	::memcpy(rb.write_head(), test3, sizeof test3 - 1);
+	rb.commit(sizeof test3 - 1);
 	for (char c : rb) {
 		std::cout << c;
 	}
