@@ -13,10 +13,12 @@ void print_mappings()
 }
 
 
-int test_linear_ringbuffer() {
-	bev::linear_ringbuffer rb(4096);
+void test_linear_ringbuffer() {
+	bev::linear_ringbuffer rb(4095);
 	int n = rb.capacity();
-
+	assert(n % 4096 == 0); // Check rounding up to the minimum page size of 4096.
+	assert(!rb.size());
+	assert(rb.empty());
 	// Test 1: Check that we can read and write the full capacity
 	// of the buffer.
 	std::cout << "Test 1..." << std::flush;
@@ -28,6 +30,8 @@ int test_linear_ringbuffer() {
 	assert(rb.free_size() == rb.capacity());
 	::memcpy(rb.write_head(), sbuf, n);
 	rb.commit(n);
+	assert(rb.size() == n);
+	assert(!rb.empty());
 
 	::memcpy(tbuf, rb.read_head(), rb.size());
 	rb.consume(n);
@@ -41,9 +45,11 @@ int test_linear_ringbuffer() {
 	// starting in one copy of the buffer and ending in the other.
 	std::cout << "Test 2..." << std::flush;
 	rb.clear();
+	assert(rb.empty());
 	std::fill_n(sbuf, n, 'y');
 	rb.commit(n/2);
 	rb.consume(n/2);
+	assert(rb.empty());
 
 	// Arbitrarily use some amount n/2 < m < n to ensure we write
 	// over the edge.
@@ -73,7 +79,7 @@ int test_linear_ringbuffer() {
 	}
 }
 
-int test_io_buffer()
+void test_io_buffer()
 {
 	bev::io_buffer iob(4096);
 	int n = iob.capacity();

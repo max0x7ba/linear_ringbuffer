@@ -169,7 +169,7 @@ public:
 	// "640KiB should be enough for everyone."
 	//   - Not Bill Gates.
 	linear_ringbuffer_(size_t minsize = 640*1024);
-	~linear_ringbuffer_();
+	~linear_ringbuffer_() noexcept;
 
 	// Noexcept initialization interface, see description above.
 	linear_ringbuffer_(const delayed_init) noexcept;
@@ -204,7 +204,6 @@ private:
 	size_t capacity_;
 	size_t head_;
 	size_t tail_;
-	Size size_;
 };
 
 
@@ -230,35 +229,33 @@ using linear_ringbuffer = linear_ringbuffer_mt;
 
 template<typename T>
 void linear_ringbuffer_<T>::commit(size_t n) noexcept {
-	assert(n <= (capacity_-size_));
-	tail_ = (tail_ + n) % capacity_;
-	size_ += n;
+	assert(n <= free_size());
+	tail_ += n;
 }
 
 
 template<typename T>
 void linear_ringbuffer_<T>::consume(size_t n) noexcept {
-	assert(n <= size_);
-	head_ = (head_ + n) % capacity_;
-	size_ -= n;
+	assert(n <= size());
+	head_ += n;
 }
 
 
 template<typename T>
 void linear_ringbuffer_<T>::clear() noexcept {
-	tail_ = head_ = size_ = 0;
+	tail_ = head_ = 0;
 }
 
 
 template<typename T>
 size_t linear_ringbuffer_<T>::size() const noexcept {
-	return size_;
+	return tail_ - head_;
 }
 
 
 template<typename T>
 bool linear_ringbuffer_<T>::empty() const noexcept {
-	return size_ == 0;
+	return head_ == tail_;
 }
 
 
@@ -270,14 +267,14 @@ size_t linear_ringbuffer_<T>::capacity() const noexcept {
 
 template<typename T>
 size_t linear_ringbuffer_<T>::free_size() const noexcept {
-	return capacity_ - size_;
+	return capacity_ - size();
 }
 
 
 template<typename T>
 auto linear_ringbuffer_<T>::cbegin() const noexcept -> const_iterator
 {
-	return buffer_ + head_;
+	return buffer_ + head_ % capacity_;
 }
 
 
@@ -291,18 +288,17 @@ auto linear_ringbuffer_<T>::begin() const noexcept -> const_iterator
 template<typename T>
 auto linear_ringbuffer_<T>::read_head() noexcept -> iterator
 {
-	return buffer_ + head_;
+	return buffer_ + head_ % capacity_;
 }
 
 
 template<typename T>
 auto linear_ringbuffer_<T>::cend() const noexcept -> const_iterator
 {
-	// Fix up `end` if needed so that [begin, end) is always a
-	// valid range.
-	return head_ < tail_ ?
-		buffer_ + tail_ :
-		buffer_ + tail_ + capacity_;
+	auto h = head_ % capacity_;
+        auto t = tail_ % capacity_;
+        bool const wraps = t < h;
+        return buffer_ + t + (wraps ? capacity_ : 0);
 }
 
 
@@ -316,7 +312,7 @@ auto linear_ringbuffer_<T>::end() const noexcept -> const_iterator
 template<typename T>
 auto linear_ringbuffer_<T>::write_head() noexcept -> iterator
 {
-	return buffer_ + tail_;
+	return buffer_ + tail_ % capacity_;
 }
 
 
@@ -326,7 +322,6 @@ linear_ringbuffer_<T>::linear_ringbuffer_(const delayed_init) noexcept
   , capacity_(0)
   , head_(0)
   , tail_(0)
-  , size_(0)
 {}
 
 
@@ -336,7 +331,6 @@ linear_ringbuffer_<T>::linear_ringbuffer_(size_t minsize)
   , capacity_(0)
   , head_(0)
   , tail_(0)
-  , size_(0)
 {
 	int res = this->initialize(minsize);
 	if (res == -1) {
@@ -369,11 +363,11 @@ template<typename T>
 int linear_ringbuffer_<T>::initialize(size_t minsize) noexcept
 {
 #ifdef PAGESIZE
-	static constexpr unsigned int PAGE_SIZE = PAGESIZE;
+	static constexpr size_t PAGE_SIZE = PAGESIZE;
 #else
-	static const unsigned int PAGE_SIZE = ::sysconf(_SC_PAGESIZE);
+	static const size_t PAGE_SIZE = ::sysconf(_SC_PAGESIZE);
 #endif
-
+        printf("page_size: %zu\n", PAGE_SIZE);
 	// Use `char*` instead of `void*` because we need to do arithmetic on them.
 	unsigned char* addr =nullptr;
 	unsigned char* addr2=nullptr;
@@ -386,13 +380,10 @@ int linear_ringbuffer_<T>::initialize(size_t minsize) noexcept
 	}
 
 	// Round up to nearest multiple of page size.
-	int bytes = minsize & ~(PAGE_SIZE-1);
-	if (minsize % PAGE_SIZE) {
-		bytes += PAGE_SIZE;
-	}
+	size_t const bytes = (minsize + (PAGE_SIZE-1)) & ~(PAGE_SIZE-1);
 
 	// Check for overflow.
-	if (bytes*2u < bytes) {
+	if (bytes*2 < bytes) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -425,11 +416,8 @@ int linear_ringbuffer_<T>::initialize(size_t minsize) noexcept
 	}
 
 	// Sanity check.
-	*(char*)addr = 'x';
-	assert(*(char*)addr2 == 'x');
-
-	*(char*)addr2 = 'y';
-	assert(*(char*)addr == 'y');
+	assert((*addr = 'x') && *addr2 == 'x');
+	assert((*addr2 = 'y') && *addr == 'y');
 
 	capacity_ = bytes;
 	buffer_ = addr;
@@ -453,12 +441,11 @@ errout:
 
 
 template<typename T>
-linear_ringbuffer_<T>::~linear_ringbuffer_()
+linear_ringbuffer_<T>::~linear_ringbuffer_() noexcept
 {
 	// Either `buffer_` and `capacity_` are both initialized properly,
 	// or both are zero.
-	::munmap(buffer_, capacity_);
-	::munmap(buffer_+capacity_, capacity_);
+	::munmap(buffer_, capacity_ * 2);
 }
 
 
@@ -470,7 +457,6 @@ void linear_ringbuffer_<T>::swap(linear_ringbuffer_<T>& other) noexcept
 	swap(capacity_, other.capacity_);
 	swap(tail_, other.tail_);
 	swap(head_, other.head_);
-	swap(size_, other.size_);
 }
 
 
